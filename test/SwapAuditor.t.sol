@@ -22,24 +22,13 @@ contract SwapAuditorTest is Test {
         swapAuditor.setTrustedCaller(trustedCaller, true);
 
         // Эмулируем вызов symbol() для валидных токенов
-        vm.mockCall(
-            tokenIn,
-            abi.encodeWithSignature("symbol()"),
-            abi.encode("TIN")
-        );
-        vm.mockCall(
-            tokenOut,
-            abi.encodeWithSignature("symbol()"),
-            abi.encode("TOUT")
-        );
+        vm.mockCall(tokenIn, abi.encodeWithSignature("symbol()"), abi.encode("TIN"));
+        vm.mockCall(tokenOut, abi.encodeWithSignature("symbol()"), abi.encode("TOUT"));
     }
 
     function testDeployment() public view {
         assertEq(swapAuditor.owner(), owner);
-        assertEq(
-            swapAuditor.defaultSpreadThreshold(),
-            DEFAULT_SPREAD_THRESHOLD
-        );
+        assertEq(swapAuditor.defaultSpreadThreshold(), DEFAULT_SPREAD_THRESHOLD);
         assertFalse(swapAuditor.paused());
         assertTrue(swapAuditor.trustedCallers(owner));
         assertTrue(swapAuditor.trustedCallers(trustedCaller));
@@ -48,29 +37,12 @@ contract SwapAuditorTest is Test {
     function testAnalyzeSafeSwap() public {
         uint128 amountIn = 1e18; // 1 токен
         uint128 amountOut = 0.95e18; // Спред = 95%, безопасно
-        bytes32 swapId = keccak256(
-            abi.encode(user, amountIn, amountOut, tokenIn, tokenOut)
-        );
+        bytes32 swapId = keccak256(abi.encode(user, amountIn, amountOut, tokenIn, tokenOut));
 
         vm.prank(trustedCaller);
         vm.expectEmit(true, true, false, true);
-        emit SwapAuditor.SwapAnalyzed(
-            swapId,
-            user,
-            tokenIn,
-            tokenOut,
-            amountIn,
-            amountOut,
-            true
-        );
-        swapAuditor.analyzeSwap(
-            user,
-            amountIn,
-            amountOut,
-            tokenIn,
-            tokenOut,
-            amountOut
-        ); // minOut = amountOut
+        emit SwapAuditor.SwapAnalyzed(swapId, user, tokenIn, tokenOut, amountIn, amountOut, true);
+        swapAuditor.analyzeSwap(user, amountIn, amountOut, tokenIn, tokenOut, amountOut); // minOut = amountOut
 
         SwapAuditor.SwapData memory swapData = swapAuditor.getSwapData(swapId);
         assertEq(swapData.sender, user);
@@ -86,29 +58,12 @@ contract SwapAuditorTest is Test {
     function testAnalyzeUnsafeSwap() public {
         uint128 amountIn = 1e18;
         uint128 amountOut = 0.9e18; // Спред = 90%, небезопасно
-        bytes32 swapId = keccak256(
-            abi.encode(user, amountIn, amountOut, tokenIn, tokenOut)
-        );
+        bytes32 swapId = keccak256(abi.encode(user, amountIn, amountOut, tokenIn, tokenOut));
 
         vm.prank(trustedCaller);
         vm.expectEmit(true, true, false, true);
-        emit SwapAuditor.SwapAnalyzed(
-            swapId,
-            user,
-            tokenIn,
-            tokenOut,
-            amountIn,
-            amountOut,
-            false
-        );
-        swapAuditor.analyzeSwap(
-            user,
-            amountIn,
-            amountOut,
-            tokenIn,
-            tokenOut,
-            amountOut
-        ); // minOut = amountOut
+        emit SwapAuditor.SwapAnalyzed(swapId, user, tokenIn, tokenOut, amountIn, amountOut, false);
+        swapAuditor.analyzeSwap(user, amountIn, amountOut, tokenIn, tokenOut, amountOut); // minOut = amountOut
 
         SwapAuditor.SwapData memory swapData = swapAuditor.getSwapData(swapId);
         assertFalse(swapData.isSafe);
@@ -136,14 +91,7 @@ contract SwapAuditorTest is Test {
         NotERC20 invalidToken = new NotERC20();
         vm.prank(trustedCaller);
         vm.expectRevert("Invalid ERC20 token");
-        swapAuditor.analyzeSwap(
-            user,
-            1e18,
-            1e18,
-            address(invalidToken),
-            tokenOut,
-            1e18
-        );
+        swapAuditor.analyzeSwap(user, 1e18, 1e18, address(invalidToken), tokenOut, 1e18);
     }
 
     function testRevertBlacklistedSender() public {
@@ -164,24 +112,10 @@ contract SwapAuditorTest is Test {
         uint128 amountIn = 1e18;
         uint128 amountOut = 0.95e18;
         vm.prank(trustedCaller);
-        swapAuditor.analyzeSwap(
-            user,
-            amountIn,
-            amountOut,
-            tokenIn,
-            tokenOut,
-            amountOut
-        );
+        swapAuditor.analyzeSwap(user, amountIn, amountOut, tokenIn, tokenOut, amountOut);
         vm.prank(trustedCaller);
         vm.expectRevert("Swap already analyzed");
-        swapAuditor.analyzeSwap(
-            user,
-            amountIn,
-            amountOut,
-            tokenIn,
-            tokenOut,
-            amountOut
-        );
+        swapAuditor.analyzeSwap(user, amountIn, amountOut, tokenIn, tokenOut, amountOut);
     }
 
     function testRevertNonTrustedCaller() public {
@@ -212,75 +146,37 @@ contract SwapAuditorTest is Test {
 
     function testRevertSetSpreadThresholdNonOwner() public {
         vm.prank(attacker);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                bytes4(keccak256("OwnableUnauthorizedAccount(address)")),
-                attacker
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("OwnableUnauthorizedAccount(address)")), attacker));
         swapAuditor.setSpreadThreshold(9600);
     }
 
     function testSetPairSpreadThreshold() public {
         uint256 threshold = 9700;
         vm.expectEmit(true, true, false, true);
-        emit SwapAuditor.PairSpreadThresholdUpdated(
-            tokenIn,
-            tokenOut,
-            threshold
-        );
+        emit SwapAuditor.PairSpreadThresholdUpdated(tokenIn, tokenOut, threshold);
         swapAuditor.setPairSpreadThreshold(tokenIn, tokenOut, threshold);
-        assertEq(
-            swapAuditor.pairSpreadThresholds(tokenIn, tokenOut),
-            threshold
-        );
+        assertEq(swapAuditor.pairSpreadThresholds(tokenIn, tokenOut), threshold);
 
         // Проверяем, что порог для пары работает
         uint128 amountIn = 1e18;
         uint128 amountOut = 0.96e18; // Спред = 96%, небезопасно для 97%
-        bytes32 swapId = keccak256(
-            abi.encode(user, amountIn, amountOut, tokenIn, tokenOut)
-        );
+        bytes32 swapId = keccak256(abi.encode(user, amountIn, amountOut, tokenIn, tokenOut));
         vm.prank(trustedCaller);
-        swapAuditor.analyzeSwap(
-            user,
-            amountIn,
-            amountOut,
-            tokenIn,
-            tokenOut,
-            amountOut
-        );
+        swapAuditor.analyzeSwap(user, amountIn, amountOut, tokenIn, tokenOut, amountOut);
         SwapAuditor.SwapData memory swapData = swapAuditor.getSwapData(swapId);
         assertFalse(swapData.isSafe);
     }
 
     function testFuzzAnalyzeSwap(uint128 amountIn, uint128 amountOut) public {
         vm.assume(amountIn > 0); // Избегаем реверта на нуле
-        bytes32 swapId = keccak256(
-            abi.encode(user, amountIn, amountOut, tokenIn, tokenOut)
-        );
+        bytes32 swapId = keccak256(abi.encode(user, amountIn, amountOut, tokenIn, tokenOut));
         uint256 spread = (uint256(amountOut) * 10000) / uint256(amountIn);
         bool expectedIsSafe = spread >= DEFAULT_SPREAD_THRESHOLD;
 
         vm.prank(trustedCaller);
         vm.expectEmit(true, true, false, true);
-        emit SwapAuditor.SwapAnalyzed(
-            swapId,
-            user,
-            tokenIn,
-            tokenOut,
-            amountIn,
-            amountOut,
-            expectedIsSafe
-        );
-        swapAuditor.analyzeSwap(
-            user,
-            amountIn,
-            amountOut,
-            tokenIn,
-            tokenOut,
-            amountOut
-        );
+        emit SwapAuditor.SwapAnalyzed(swapId, user, tokenIn, tokenOut, amountIn, amountOut, expectedIsSafe);
+        swapAuditor.analyzeSwap(user, amountIn, amountOut, tokenIn, tokenOut, amountOut);
 
         SwapAuditor.SwapData memory swapData = swapAuditor.getSwapData(swapId);
         assertEq(swapData.isSafe, expectedIsSafe);
@@ -295,35 +191,18 @@ contract SwapAuditorTest is Test {
         uint128 minOut = 0.95e18; // minOut > amountOut
         vm.prank(trustedCaller);
         vm.expectRevert("Slippage: amountOut below minOut");
-        swapAuditor.analyzeSwap(
-            user,
-            amountIn,
-            amountOut,
-            tokenIn,
-            tokenOut,
-            minOut
-        );
+        swapAuditor.analyzeSwap(user, amountIn, amountOut, tokenIn, tokenOut, minOut);
     }
 
     function testRevertSetBlackListedAddressNonOwner() public {
         vm.prank(attacker);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                bytes4(keccak256("OwnableUnauthorizedAccount(address)")),
-                attacker
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("OwnableUnauthorizedAccount(address)")), attacker));
         swapAuditor.setBlackListedAddress(user, true);
     }
 
     function testRevertSetTrustedCallerNonOwner() public {
         vm.prank(attacker);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                bytes4(keccak256("OwnableUnauthorizedAccount(address)")),
-                attacker
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("OwnableUnauthorizedAccount(address)")), attacker));
         swapAuditor.setTrustedCaller(attacker, true);
     }
 }

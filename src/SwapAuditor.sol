@@ -116,11 +116,7 @@ contract SwapAuditor is Ownable, Pausable, ReentrancyGuard {
      * @param tokenOut The output token address
      * @param threshold The new threshold in basis points
      */
-    event PairSpreadThresholdUpdated(
-        address tokenIn,
-        address tokenOut,
-        uint256 threshold
-    );
+    event PairSpreadThresholdUpdated(address tokenIn, address tokenOut, uint256 threshold);
 
     /**
      * @notice Initializes the contract and sets the deployer as a trusted caller
@@ -162,11 +158,7 @@ contract SwapAuditor is Ownable, Pausable, ReentrancyGuard {
      * @param tokenOut The output token address
      * @param threshold The new threshold in basis points (max 10000)
      */
-    function setPairSpreadThreshold(
-        address tokenIn,
-        address tokenOut,
-        uint256 threshold
-    ) external onlyOwner {
+    function setPairSpreadThreshold(address tokenIn, address tokenOut, uint256 threshold) external onlyOwner {
         require(threshold <= 10000, "Threshold too high");
         pairSpreadThresholds[tokenIn][tokenOut] = threshold;
         emit PairSpreadThresholdUpdated(tokenIn, tokenOut, threshold);
@@ -177,10 +169,7 @@ contract SwapAuditor is Ownable, Pausable, ReentrancyGuard {
      * @param caller The address to set as trusted or not
      * @param isTrusted Whether the address is trusted
      */
-    function setTrustedCaller(
-        address caller,
-        bool isTrusted
-    ) external onlyOwner {
+    function setTrustedCaller(address caller, bool isTrusted) external onlyOwner {
         trustedCallers[caller] = isTrusted;
     }
 
@@ -189,10 +178,7 @@ contract SwapAuditor is Ownable, Pausable, ReentrancyGuard {
      * @param addr The address to blacklist or unblacklist
      * @param _isBlackListed Whether the address is blacklisted
      */
-    function setBlackListedAddress(
-        address addr,
-        bool _isBlackListed
-    ) external onlyOwner {
+    function setBlackListedAddress(address addr, bool _isBlackListed) external onlyOwner {
         blackListedAddresses[addr] = _isBlackListed;
     }
 
@@ -205,7 +191,7 @@ contract SwapAuditor is Ownable, Pausable, ReentrancyGuard {
     function isValidERC20(address token) internal returns (bool ok) {
         require(token != address(0), "Invalid address");
         // Check if the token implements symbol() as a basic ERC20 check
-        (ok, ) = token.staticcall(abi.encodeWithSignature("symbol()"));
+        (ok,) = token.staticcall(abi.encodeWithSignature("symbol()"));
         if (ok) isValidToken[token] = true;
         return ok;
     }
@@ -230,24 +216,13 @@ contract SwapAuditor is Ownable, Pausable, ReentrancyGuard {
         uint256 minOut
     ) external onlyTrustedCaller whenNotPaused nonReentrant returns (bytes32) {
         require(amountIn > 0, "AmountIn must be greater than 0");
+        require(tokenIn != address(0) && tokenOut != address(0), "Invalid token address");
+        require(isValidERC20(tokenIn) && isValidERC20(tokenOut), "Invalid ERC20 token");
         require(
-            tokenIn != address(0) && tokenOut != address(0),
-            "Invalid token address"
-        );
-        require(
-            isValidERC20(tokenIn) && isValidERC20(tokenOut),
-            "Invalid ERC20 token"
-        );
-        require(
-            !blackListedAddresses[sender] &&
-                !blackListedAddresses[tokenIn] &&
-                !blackListedAddresses[tokenOut],
+            !blackListedAddresses[sender] && !blackListedAddresses[tokenIn] && !blackListedAddresses[tokenOut],
             "Blacklisted address"
         );
-        require(
-            amountIn <= type(uint128).max && amountOut <= type(uint128).max,
-            "Amount too large"
-        );
+        require(amountIn <= type(uint128).max && amountOut <= type(uint128).max, "Amount too large");
         require(amountOut >= minOut, "Slippage: amountOut below minOut");
         // Calculate spread in basis points
         // TODO: Replace with Chainlink Price Feed or 1inch API call for accurate spread calculation
@@ -257,31 +232,14 @@ contract SwapAuditor is Ownable, Pausable, ReentrancyGuard {
             : defaultSpreadThreshold;
         bool isSafe = spread >= threshold;
         // Generate unique swap ID
-        bytes32 swapId = keccak256(
-            abi.encode(sender, amountIn, amountOut, tokenIn, tokenOut)
-        );
+        bytes32 swapId = keccak256(abi.encode(sender, amountIn, amountOut, tokenIn, tokenOut));
         require(swaps[swapId].sender == address(0), "Swap already analyzed");
         // Store swap data
-        swaps[swapId] = SwapData(
-            sender,
-            uint128(amountIn),
-            uint128(amountOut),
-            tokenIn,
-            tokenOut,
-            isSafe
-        );
+        swaps[swapId] = SwapData(sender, uint128(amountIn), uint128(amountOut), tokenIn, tokenOut, isSafe);
         totalSwaps++;
         if (!isSafe) unsafeSwaps++;
         // Emit event for real-time tracking
-        emit SwapAnalyzed(
-            swapId,
-            sender,
-            tokenIn,
-            tokenOut,
-            amountIn,
-            amountOut,
-            isSafe
-        );
+        emit SwapAnalyzed(swapId, sender, tokenIn, tokenOut, amountIn, amountOut, isSafe);
         return swapId;
     }
 
@@ -290,9 +248,7 @@ contract SwapAuditor is Ownable, Pausable, ReentrancyGuard {
      * @param swapId The unique identifier of the swap
      * @return The SwapData struct for the swap
      */
-    function getSwapData(
-        bytes32 swapId
-    ) external view returns (SwapData memory) {
+    function getSwapData(bytes32 swapId) external view returns (SwapData memory) {
         return swaps[swapId];
     }
 
